@@ -43,10 +43,14 @@ public class RateLimiterFilter extends OncePerRequestFilter {
             FilterChain filterChain)
             throws ServletException, IOException {
 
+<<<<<<< HEAD
         // =========================================
         // HANDLE OPTIONS
         // =========================================
 
+=======
+        // OPTIONS
+>>>>>>> 75e116c (Updated code)
         if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
 
             response.setStatus(HttpServletResponse.SC_OK);
@@ -54,9 +58,22 @@ public class RateLimiterFilter extends OncePerRequestFilter {
             return;
         }
 
+<<<<<<< HEAD
         // =========================================
         // GET REAL CLIENT IP
         // =========================================
+=======
+        // REAL IP
+        String ip = request.getHeader("X-Forwarded-For");
+
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getRemoteAddr();
+        }
+
+        if (ip.contains(",")) {
+            ip = ip.split(",")[0].trim();
+        }
+>>>>>>> 75e116c (Updated code)
 
         String ip = request.getHeader("X-Forwarded-For");
 
@@ -81,38 +98,67 @@ public class RateLimiterFilter extends OncePerRequestFilter {
 
         String endpoint = request.getRequestURI();
 
+<<<<<<< HEAD
         // =========================================
         // ADMIN BYPASS
         // =========================================
 
         if (endpoint.startsWith("/api/admin")) {
 
+=======
+        // ALLOW ADMIN
+        if (endpoint.startsWith("/api/admin")) {
+>>>>>>> 75e116c (Updated code)
             filterChain.doFilter(request, response);
 
             return;
         }
 
+<<<<<<< HEAD
         // =========================================
         // HARD BLOCK CHECK
         // =========================================
+=======
+        // ==================================================
+        // HARD BLOCK CHECK
+        // ==================================================
+>>>>>>> 75e116c (Updated code)
 
         if (abuseService.isBlocked(ip)) {
 
             log(ip, endpoint, ApiRequestLog.Status.BLOCKED);
 
+<<<<<<< HEAD
             sendJsonResponse(
                     response,
                     429,
                     "BLOCKED",
                     "IP temporarily blocked due to suspicious activity"
             );
+=======
+            response.setContentType("application/json");
+            response.setStatus(429);
+
+            response.getWriter().write("""
+            {
+              "error": "BLOCKED",
+              "message": "IP temporarily blocked due to suspicious activity"
+            }
+            """);
+>>>>>>> 75e116c (Updated code)
 
             return;
         }
 
+<<<<<<< HEAD
         // =========================================
         // TOKEN BUCKET CHECK
         // =========================================
+=======
+        // ==================================================
+        // TOKEN BUCKET CHECK
+        // ==================================================
+>>>>>>> 75e116c (Updated code)
 
         TokenBucket bucket = store.getBucket(ip);
 
@@ -120,27 +166,47 @@ public class RateLimiterFilter extends OncePerRequestFilter {
 
             abuseService.recordRateLimitHit(ip);
 
-            log(ip, endpoint, ApiRequestLog.Status.BLOCKED);
+            // IMPORTANT
+            log(ip, endpoint, ApiRequestLog.Status.RATE_LIMITED);
 
+<<<<<<< HEAD
             sendJsonResponse(
                     response,
                     429,
                     "RATE_LIMIT",
                     "Too many requests. Token bucket exhausted."
             );
+=======
+            response.setContentType("application/json");
+            response.setStatus(429);
+
+            response.getWriter().write("""
+            {
+              "error": "RATE_LIMIT",
+              "message": "Token bucket exhausted. Wait for refill."
+            }
+            """);
+>>>>>>> 75e116c (Updated code)
 
             return;
         }
 
+<<<<<<< HEAD
         // =========================================
         // SUCCESS
         // =========================================
+=======
+        // ==================================================
+        // SUCCESS
+        // ==================================================
+>>>>>>> 75e116c (Updated code)
 
         log(ip, endpoint, ApiRequestLog.Status.ALLOWED);
 
         filterChain.doFilter(request, response);
     }
 
+<<<<<<< HEAD
     // =========================================
     // JSON RESPONSE HELPER
     // =========================================
@@ -178,6 +244,11 @@ public class RateLimiterFilter extends OncePerRequestFilter {
             String ip,
             String endpoint,
             ApiRequestLog.Status status) {
+=======
+    private void log(String ip,
+                     String endpoint,
+                     ApiRequestLog.Status status) {
+>>>>>>> 75e116c (Updated code)
 
         ApiRequestLog log = new ApiRequestLog();
 
