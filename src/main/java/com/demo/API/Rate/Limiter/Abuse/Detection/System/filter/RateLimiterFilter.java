@@ -67,7 +67,7 @@ public class RateLimiterFilter extends OncePerRequestFilter {
             log(ip, endpoint, ApiRequestLog.Status.BLOCKED);
 
             response.setContentType("application/json");
-            response.setStatus(HttpServletResponse.SC_TOO_MANY_REQUESTS);
+            response.setStatus(429);
 
             response.getWriter().write("""
             {
@@ -91,7 +91,7 @@ public class RateLimiterFilter extends OncePerRequestFilter {
             log(ip, endpoint, ApiRequestLog.Status.BLOCKED);
 
             response.setContentType("application/json");
-            response.setStatus(HttpServletResponse.SC_TOO_MANY_REQUESTS);
+            response.setStatus(429);
 
             response.getWriter().write("""
             {
