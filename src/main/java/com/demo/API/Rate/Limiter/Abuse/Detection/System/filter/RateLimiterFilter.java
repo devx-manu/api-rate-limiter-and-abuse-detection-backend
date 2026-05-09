@@ -21,7 +21,9 @@ import jakarta.servlet.http.HttpServletResponse;
 public class RateLimiterFilter extends OncePerRequestFilter {
 
     private final RateLimiterStore store;
+
     private final AbuseDetectionService abuseService;
+
     private final ApiRequestLogRepository logRepo;
 
     public RateLimiterFilter(
@@ -35,105 +37,156 @@ public class RateLimiterFilter extends OncePerRequestFilter {
     }
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain filterChain)
+    protected void doFilterInternal(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain)
             throws ServletException, IOException {
 
-        
+        // =========================================
+        // HANDLE OPTIONS
+        // =========================================
 
         if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+
             response.setStatus(HttpServletResponse.SC_OK);
+
             return;
         }
 
-       
+        // =========================================
+        // GET REAL CLIENT IP
+        // =========================================
 
         String ip = request.getHeader("X-Forwarded-For");
 
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+        if (ip == null ||
+            ip.isBlank() ||
+            "unknown".equalsIgnoreCase(ip)) {
+
             ip = request.getRemoteAddr();
         }
 
-       
+        // FIRST REAL IP
         if (ip.contains(",")) {
+
             ip = ip.split(",")[0].trim();
         }
 
-       
+        // LOCALHOST NORMALIZATION
         if ("0:0:0:0:0:0:0:1".equals(ip)) {
+
             ip = "127.0.0.1";
         }
 
         String endpoint = request.getRequestURI();
 
-        
+        // =========================================
+        // ADMIN BYPASS
+        // =========================================
 
         if (endpoint.startsWith("/api/admin")) {
+
             filterChain.doFilter(request, response);
+
             return;
         }
 
-       
+        // =========================================
+        // HARD BLOCK CHECK
+        // =========================================
 
         if (abuseService.isBlocked(ip)) {
 
             log(ip, endpoint, ApiRequestLog.Status.BLOCKED);
 
-            response.setContentType("application/json");
-            response.setStatus(429);
-
-            response.getWriter().write("""
-            {
-              "error": "BLOCKED",
-              "message": "IP temporarily blocked due to suspicious activity"
-            }
-            """);
+            sendJsonResponse(
+                    response,
+                    429,
+                    "BLOCKED",
+                    "IP temporarily blocked due to suspicious activity"
+            );
 
             return;
         }
 
-       
+        // =========================================
+        // TOKEN BUCKET CHECK
+        // =========================================
 
         TokenBucket bucket = store.getBucket(ip);
 
         if (!bucket.tryConsume()) {
 
-           
             abuseService.recordRateLimitHit(ip);
 
             log(ip, endpoint, ApiRequestLog.Status.BLOCKED);
 
-            response.setContentType("application/json");
-            response.setStatus(429);
-
-            response.getWriter().write("""
-            {
-              "error": "RATE_LIMIT",
-              "message": "Too many requests. Slow down."
-            }
-            """);
+            sendJsonResponse(
+                    response,
+                    429,
+                    "RATE_LIMIT",
+                    "Too many requests. Token bucket exhausted."
+            );
 
             return;
         }
 
-       
+        // =========================================
+        // SUCCESS
+        // =========================================
 
         log(ip, endpoint, ApiRequestLog.Status.ALLOWED);
 
         filterChain.doFilter(request, response);
     }
 
+    // =========================================
+    // JSON RESPONSE HELPER
+    // =========================================
 
-    private void log(String ip,
-                     String endpoint,
-                     ApiRequestLog.Status status) {
+    private void sendJsonResponse(
+            HttpServletResponse response,
+            int status,
+            String error,
+            String message)
+            throws IOException {
+
+        response.setStatus(status);
+
+        response.setCharacterEncoding("UTF-8");
+
+        response.setContentType("application/json");
+
+        String jsonResponse = """
+        {
+          "error": "%s",
+          "message": "%s"
+        }
+        """.formatted(error, message);
+
+        response.getWriter().write(jsonResponse);
+
+        response.getWriter().flush();
+    }
+
+    // =========================================
+    // LOGGING
+    // =========================================
+
+    private void log(
+            String ip,
+            String endpoint,
+            ApiRequestLog.Status status) {
 
         ApiRequestLog log = new ApiRequestLog();
 
         log.setIp(ip);
+
         log.setEndpoint(endpoint);
+
         log.setTimestamp(LocalDateTime.now());
+
         log.setStatus(status);
 
         logRepo.save(log);
