@@ -68,12 +68,14 @@ public class RateLimiterFilter extends OncePerRequestFilter {
         }
 
         // FIRST REAL IP
+
         if (ip.contains(",")) {
 
             ip = ip.split(",")[0].trim();
         }
 
         // LOCALHOST NORMALIZATION
+
         if ("0:0:0:0:0:0:0:1".equals(ip)) {
 
             ip = "127.0.0.1";
@@ -120,8 +122,6 @@ public class RateLimiterFilter extends OncePerRequestFilter {
 
             abuseService.recordRateLimitHit(ip);
 
-            // IMPORTANT:
-            // RATE_LIMITED should NOT be BLOCKED
             log(ip, endpoint, ApiRequestLog.Status.RATE_LIMITED);
 
             sendJsonResponse(
@@ -158,7 +158,9 @@ public class RateLimiterFilter extends OncePerRequestFilter {
 
         response.setCharacterEncoding("UTF-8");
 
-        response.setContentType("application/json");
+        response.setContentType("application/json;charset=UTF-8");
+
+        response.setHeader("Cache-Control", "no-cache");
 
         String jsonResponse = """
         {
