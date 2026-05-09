@@ -24,9 +24,10 @@ public class RateLimiterFilter extends OncePerRequestFilter {
     private final AbuseDetectionService abuseService;
     private final ApiRequestLogRepository logRepo;
 
-    public RateLimiterFilter(RateLimiterStore store,
-                             AbuseDetectionService abuseService,
-                             ApiRequestLogRepository logRepo) {
+    public RateLimiterFilter(
+            RateLimiterStore store,
+            AbuseDetectionService abuseService,
+            ApiRequestLogRepository logRepo) {
 
         this.store = store;
         this.abuseService = abuseService;
@@ -39,28 +40,41 @@ public class RateLimiterFilter extends OncePerRequestFilter {
                                     FilterChain filterChain)
             throws ServletException, IOException {
 
-       
+        
+
         if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
             response.setStatus(HttpServletResponse.SC_OK);
             return;
         }
 
-        String ip = request.getRemoteAddr();
+       
 
-    
+        String ip = request.getHeader("X-Forwarded-For");
+
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getRemoteAddr();
+        }
+
+       
+        if (ip.contains(",")) {
+            ip = ip.split(",")[0].trim();
+        }
+
+       
         if ("0:0:0:0:0:0:0:1".equals(ip)) {
             ip = "127.0.0.1";
         }
 
         String endpoint = request.getRequestURI();
 
-    
-        if (endpoint.startsWith("/api/admin") && ip.equals("127.0.0.1")) {
+        
+
+        if (endpoint.startsWith("/api/admin")) {
             filterChain.doFilter(request, response);
             return;
         }
 
-      
+       
 
         if (abuseService.isBlocked(ip)) {
 
@@ -79,13 +93,13 @@ public class RateLimiterFilter extends OncePerRequestFilter {
             return;
         }
 
-     
+       
 
         TokenBucket bucket = store.getBucket(ip);
 
         if (!bucket.tryConsume()) {
 
-            // Record abuse attempt
+           
             abuseService.recordRateLimitHit(ip);
 
             log(ip, endpoint, ApiRequestLog.Status.BLOCKED);
@@ -103,14 +117,13 @@ public class RateLimiterFilter extends OncePerRequestFilter {
             return;
         }
 
-      
+       
 
         log(ip, endpoint, ApiRequestLog.Status.ALLOWED);
 
         filterChain.doFilter(request, response);
     }
 
-    
 
     private void log(String ip,
                      String endpoint,
