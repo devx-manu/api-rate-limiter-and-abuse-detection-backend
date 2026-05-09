@@ -27,6 +27,7 @@ public class RateLimiterFilter extends OncePerRequestFilter {
     public RateLimiterFilter(RateLimiterStore store,
                              AbuseDetectionService abuseService,
                              ApiRequestLogRepository logRepo) {
+
         this.store = store;
         this.abuseService = abuseService;
         this.logRepo = logRepo;
@@ -38,12 +39,7 @@ public class RateLimiterFilter extends OncePerRequestFilter {
                                     FilterChain filterChain)
             throws ServletException, IOException {
 
-        // ✅ CORS (DEV MODE)
-        response.setHeader("Access-Control-Allow-Origin", "http://localhost:3000");
-        response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-        response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-        response.setHeader("Access-Control-Max-Age", "3600");
-
+       
         if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
             response.setStatus(HttpServletResponse.SC_OK);
             return;
@@ -51,63 +47,77 @@ public class RateLimiterFilter extends OncePerRequestFilter {
 
         String ip = request.getRemoteAddr();
 
+    
         if ("0:0:0:0:0:0:0:1".equals(ip)) {
             ip = "127.0.0.1";
         }
 
         String endpoint = request.getRequestURI();
 
-        // ✅ Allow admin endpoints from localhost
+    
         if (endpoint.startsWith("/api/admin") && ip.equals("127.0.0.1")) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        // 🚫 BLOCK CHECK (HIGHEST PRIORITY)
+      
+
         if (abuseService.isBlocked(ip)) {
+
             log(ip, endpoint, ApiRequestLog.Status.BLOCKED);
 
             response.setContentType("application/json");
-            response.setStatus(429);
+            response.setStatus(HttpServletResponse.SC_TOO_MANY_REQUESTS);
+
             response.getWriter().write("""
             {
               "error": "BLOCKED",
-              "message": "You are temporarily blocked"
+              "message": "IP temporarily blocked due to suspicious activity"
             }
             """);
 
             return;
         }
 
-        // ⚡ RATE LIMIT CHECK
+     
+
         TokenBucket bucket = store.getBucket(ip);
 
         if (!bucket.tryConsume()) {
 
+            // Record abuse attempt
             abuseService.recordRateLimitHit(ip);
 
             log(ip, endpoint, ApiRequestLog.Status.BLOCKED);
 
             response.setContentType("application/json");
-            response.setStatus(429);
+            response.setStatus(HttpServletResponse.SC_TOO_MANY_REQUESTS);
+
             response.getWriter().write("""
             {
               "error": "RATE_LIMIT",
-              "message": "Too many requests"
+              "message": "Too many requests. Slow down."
             }
             """);
 
             return;
         }
 
-        // ✅ SUCCESS
+      
+
         log(ip, endpoint, ApiRequestLog.Status.ALLOWED);
 
         filterChain.doFilter(request, response);
     }
 
-    private void log(String ip, String endpoint, ApiRequestLog.Status status) {
+    
+
+    private void log(String ip,
+                     String endpoint,
+                     ApiRequestLog.Status status) {
+
         ApiRequestLog log = new ApiRequestLog();
+
         log.setIp(ip);
         log.setEndpoint(endpoint);
         log.setTimestamp(LocalDateTime.now());
