@@ -27,7 +27,7 @@ public class ApiRequestLog {
 	private Status status;
 
 	public enum Status {
-		ALLOWED, BLOCKED
+		ALLOWED, BLOCKED, RATE_LIMITED
 	}
 
 	public Long getId() {
